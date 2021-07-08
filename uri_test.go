@@ -56,7 +56,7 @@ func testURIAcquireRelease(t *testing.T) {
 		host := fmt.Sprintf("host.%d.com", i*23)
 		path := fmt.Sprintf("/foo/%d/bar", i*17)
 		queryArgs := "?foo=bar&baz=aass"
-		u.Parse([]byte(host), []byte(path+queryArgs))
+		u.Parse([]byte(host), []byte(path+queryArgs)) //nolint:errcheck
 		if string(u.Host()) != host {
 			t.Fatalf("unexpected host %q. Expecting %q", u.Host(), host)
 		}
@@ -133,7 +133,7 @@ func TestURIUpdate(t *testing.T) {
 
 func testURIUpdate(t *testing.T, base, update, result string) {
 	var u URI
-	u.Parse(nil, []byte(base))
+	u.Parse(nil, []byte(base)) //nolint:errcheck
 	u.Update(update)
 	s := u.String()
 	if s != result {
@@ -142,6 +142,8 @@ func testURIUpdate(t *testing.T, base, update, result string) {
 }
 
 func TestURIPathNormalize(t *testing.T) {
+	t.Parallel()
+
 	var u URI
 
 	// double slash
@@ -190,7 +192,7 @@ func TestURIPathNormalize(t *testing.T) {
 }
 
 func testURIPathNormalize(t *testing.T, u *URI, requestURI, expectedPath string) {
-	u.Parse(nil, []byte(requestURI))
+	u.Parse(nil, []byte(requestURI)) //nolint:errcheck
 	if string(u.Path()) != expectedPath {
 		t.Fatalf("Unexpected path %q. Expected %q. requestURI=%q", u.Path(), expectedPath, requestURI)
 	}
@@ -201,7 +203,7 @@ func TestURINoNormalization(t *testing.T) {
 
 	var u URI
 	irregularPath := "/aaa%2Fbbb%2F%2E.%2Fxxx"
-	u.Parse(nil, []byte(irregularPath))
+	u.Parse(nil, []byte(irregularPath)) //nolint:errcheck
 	u.DisablePathNormalizing = true
 	if string(u.RequestURI()) != irregularPath {
 		t.Fatalf("Unexpected path %q. Expected %q.", u.Path(), irregularPath)
@@ -250,7 +252,7 @@ func TestURIFullURI(t *testing.T) {
 
 	// test with empty args and non-empty query string
 	var u URI
-	u.Parse([]byte("google.com"), []byte("/foo?bar=baz&baraz#qqqq"))
+	u.Parse([]byte("google.com"), []byte("/foo?bar=baz&baraz#qqqq")) //nolint:errcheck
 	uri := u.FullURI()
 	expectedURI := "http://google.com/foo?bar=baz&baraz#qqqq"
 	if string(uri) != expectedURI {
@@ -274,6 +276,8 @@ func testURIFullURI(t *testing.T, scheme, host, path, hash string, args *Args, e
 }
 
 func TestURIParseNilHost(t *testing.T) {
+	t.Parallel()
+
 	testURIParseScheme(t, "http://google.com/foo?bar#baz", "http", "google.com", "/foo?bar", "baz")
 	testURIParseScheme(t, "HTtP://google.com/", "http", "google.com", "/", "")
 	testURIParseScheme(t, "://google.com/xyz", "http", "google.com", "/xyz", "")
@@ -283,11 +287,15 @@ func TestURIParseNilHost(t *testing.T) {
 
 	// missing slash after hostname
 	testURIParseScheme(t, "http://foobar.com?baz=111", "http", "foobar.com", "/?baz=111", "")
+
+	// slash in args
+	testURIParseScheme(t, "http://foobar.com?baz=111/222/xyz", "http", "foobar.com", "/?baz=111/222/xyz", "")
+	testURIParseScheme(t, "http://foobar.com?111/222/xyz", "http", "foobar.com", "/?111/222/xyz", "")
 }
 
 func testURIParseScheme(t *testing.T, uri, expectedScheme, expectedHost, expectedRequestURI, expectedHash string) {
 	var u URI
-	u.Parse(nil, []byte(uri))
+	u.Parse(nil, []byte(uri)) //nolint:errcheck
 	if string(u.Scheme()) != expectedScheme {
 		t.Fatalf("Unexpected scheme %q. Expecting %q for uri %q", u.Scheme(), expectedScheme, uri)
 	}
@@ -361,7 +369,7 @@ func TestURIParse(t *testing.T) {
 
 func testURIParse(t *testing.T, u *URI, host, uri,
 	expectedURI, expectedHost, expectedPath, expectedPathOriginal, expectedArgs, expectedHash string) {
-	u.Parse([]byte(host), []byte(uri))
+	u.Parse([]byte(host), []byte(uri)) //nolint:errcheck
 
 	if !bytes.Equal(u.FullURI(), []byte(expectedURI)) {
 		t.Fatalf("Unexpected uri %q. Expected %q. host=%q, uri=%q", u.FullURI(), expectedURI, host, uri)
@@ -380,5 +388,19 @@ func testURIParse(t *testing.T, u *URI, host, uri,
 	}
 	if !bytes.Equal(u.Hash(), []byte(expectedHash)) {
 		t.Fatalf("Unexpected hash %q. Expected %q. host=%q, uri=%q", u.Hash(), expectedHash, host, uri)
+	}
+}
+
+func TestURIWithQuerystringOverride(t *testing.T) {
+	t.Parallel()
+
+	var u URI
+	u.SetQueryString("q1=foo&q2=bar")
+	u.QueryArgs().Add("q3", "baz")
+	u.SetQueryString("q1=foo&q2=bar&q4=quux")
+	uriString := string(u.RequestURI())
+
+	if uriString != "/?q1=foo&q2=bar&q4=quux" {
+		t.Fatalf("Expected Querystring to be overridden but was %s ", uriString)
 	}
 }

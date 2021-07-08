@@ -13,6 +13,8 @@ import (
 )
 
 func TestNewFastHTTPHandler(t *testing.T) {
+	t.Parallel()
+
 	expectedMethod := fasthttp.MethodPost
 	expectedProto := "HTTP/1.1"
 	expectedProtoMajor := 1
@@ -20,7 +22,6 @@ func TestNewFastHTTPHandler(t *testing.T) {
 	expectedRequestURI := "/foo/bar?baz=123"
 	expectedBody := "body 123 foo bar baz"
 	expectedContentLength := len(expectedBody)
-	expectedTransferEncoding := "encoding"
 	expectedHost := "foobar.com"
 	expectedRemoteAddr := "1.2.3.4:6789"
 	expectedHeader := map[string]string{
@@ -56,8 +57,8 @@ func TestNewFastHTTPHandler(t *testing.T) {
 		if r.ContentLength != int64(expectedContentLength) {
 			t.Fatalf("unexpected contentLength %d. Expecting %d", r.ContentLength, expectedContentLength)
 		}
-		if len(r.TransferEncoding) != 1 || r.TransferEncoding[0] != expectedTransferEncoding {
-			t.Fatalf("unexpected transferEncoding %q. Expecting %q", r.TransferEncoding, expectedTransferEncoding)
+		if len(r.TransferEncoding) != 0 {
+			t.Fatalf("unexpected transferEncoding %q. Expecting []", r.TransferEncoding)
 		}
 		if r.Host != expectedHost {
 			t.Fatalf("unexpected host %q. Expecting %q", r.Host, expectedHost)
@@ -101,7 +102,6 @@ func TestNewFastHTTPHandler(t *testing.T) {
 	req.Header.SetMethod(expectedMethod)
 	req.SetRequestURI(expectedRequestURI)
 	req.Header.SetHost(expectedHost)
-	req.Header.Add(fasthttp.HeaderTransferEncoding, expectedTransferEncoding)
 	req.BodyWriter().Write([]byte(expectedBody)) // nolint:errcheck
 	for k, v := range expectedHeader {
 		req.Header.Set(k, v)
@@ -139,5 +139,34 @@ func setContextValueMiddleware(next fasthttp.RequestHandler, key string, value i
 	return func(ctx *fasthttp.RequestCtx) {
 		ctx.SetUserValue(key, value)
 		next(ctx)
+	}
+}
+
+func TestContentType(t *testing.T) {
+	t.Parallel()
+
+	nethttpH := func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("<!doctype html><html>")) //nolint:errcheck
+	}
+	fasthttpH := NewFastHTTPHandler(http.HandlerFunc(nethttpH))
+
+	var ctx fasthttp.RequestCtx
+	var req fasthttp.Request
+
+	req.SetRequestURI("http://example.com")
+
+	remoteAddr, err := net.ResolveTCPAddr("tcp", "1.2.3.4:80")
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	ctx.Init(&req, remoteAddr, nil)
+
+	fasthttpH(&ctx)
+
+	resp := &ctx.Response
+	got := string(resp.Header.Peek("Content-Type"))
+	expected := "text/html; charset=utf-8"
+	if got != expected {
+		t.Errorf("expected %q got %q", expected, got)
 	}
 }

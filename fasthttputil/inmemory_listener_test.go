@@ -14,6 +14,8 @@ import (
 )
 
 func TestInmemoryListener(t *testing.T) {
+	t.Parallel()
+
 	ln := NewInmemoryListener()
 
 	ch := make(chan struct{})
@@ -21,29 +23,29 @@ func TestInmemoryListener(t *testing.T) {
 		go func(n int) {
 			conn, err := ln.Dial()
 			if err != nil {
-				t.Fatalf("unexpected error: %s", err)
+				t.Errorf("unexpected error: %s", err)
 			}
 			defer conn.Close()
 			req := fmt.Sprintf("request_%d", n)
 			nn, err := conn.Write([]byte(req))
 			if err != nil {
-				t.Fatalf("unexpected error: %s", err)
+				t.Errorf("unexpected error: %s", err)
 			}
 			if nn != len(req) {
-				t.Fatalf("unexpected number of bytes written: %d. Expecting %d", nn, len(req))
+				t.Errorf("unexpected number of bytes written: %d. Expecting %d", nn, len(req))
 			}
 			buf := make([]byte, 30)
 			nn, err = conn.Read(buf)
 			if err != nil {
-				t.Fatalf("unexpected error: %s", err)
+				t.Errorf("unexpected error: %s", err)
 			}
 			buf = buf[:nn]
 			resp := fmt.Sprintf("response_%d", n)
 			if nn != len(resp) {
-				t.Fatalf("unexpected number of bytes read: %d. Expecting %d", nn, len(resp))
+				t.Errorf("unexpected number of bytes read: %d. Expecting %d", nn, len(resp))
 			}
 			if string(buf) != resp {
-				t.Fatalf("unexpected response %q. Expecting %q", buf, resp)
+				t.Errorf("unexpected response %q. Expecting %q", buf, resp)
 			}
 			ch <- struct{}{}
 		}(i)
@@ -61,19 +63,19 @@ func TestInmemoryListener(t *testing.T) {
 			buf := make([]byte, 30)
 			n, err := conn.Read(buf)
 			if err != nil {
-				t.Fatalf("unexpected error: %s", err)
+				t.Errorf("unexpected error: %s", err)
 			}
 			buf = buf[:n]
 			if !bytes.HasPrefix(buf, []byte("request_")) {
-				t.Fatalf("unexpected request prefix %q. Expecting %q", buf, "request_")
+				t.Errorf("unexpected request prefix %q. Expecting %q", buf, "request_")
 			}
 			resp := fmt.Sprintf("response_%s", buf[len("request_"):])
 			n, err = conn.Write([]byte(resp))
 			if err != nil {
-				t.Fatalf("unexpected error: %s", err)
+				t.Errorf("unexpected error: %s", err)
 			}
 			if n != len(resp) {
-				t.Fatalf("unexpected number of bytes written: %d. Expecting %d", n, len(resp))
+				t.Errorf("unexpected number of bytes written: %d. Expecting %d", n, len(resp))
 			}
 		}
 	}()
@@ -129,7 +131,7 @@ func testInmemoryListenerHTTP(t *testing.T, f func(t *testing.T, client *http.Cl
 
 	go func() {
 		if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
-			t.Fatalf("unexpected error: %s", err)
+			t.Errorf("unexpected error: %s", err)
 		}
 	}()
 
@@ -156,12 +158,16 @@ func testInmemoryListenerHTTPSingle(t *testing.T, client *http.Client, content s
 }
 
 func TestInmemoryListenerHTTPSingle(t *testing.T) {
+	t.Parallel()
+
 	testInmemoryListenerHTTP(t, func(t *testing.T, client *http.Client) {
 		testInmemoryListenerHTTPSingle(t, client, "request")
 	})
 }
 
 func TestInmemoryListenerHTTPSerial(t *testing.T) {
+	t.Parallel()
+
 	testInmemoryListenerHTTP(t, func(t *testing.T, client *http.Client) {
 		for i := 0; i < 10; i++ {
 			testInmemoryListenerHTTPSingle(t, client, fmt.Sprintf("request_%d", i))
@@ -170,6 +176,8 @@ func TestInmemoryListenerHTTPSerial(t *testing.T) {
 }
 
 func TestInmemoryListenerHTTPConcurrent(t *testing.T) {
+	t.Parallel()
+
 	testInmemoryListenerHTTP(t, func(t *testing.T, client *http.Client) {
 		var wg sync.WaitGroup
 		for i := 0; i < 10; i++ {
